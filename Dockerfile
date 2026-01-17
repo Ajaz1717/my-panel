@@ -1,7 +1,7 @@
-# 1️⃣ Base Image (CLI is required for php -S)
-FROM php:8.2-cli
+# 1️⃣ Base Image (Apache + PHP)
+FROM php:8.2-apache
 
-# 2️⃣ System Dependencies
+# 2️⃣ System dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     zip \
@@ -10,35 +10,37 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+    && docker-php-ext-install pdo_mysql mbstring exif bcmath gd
 
-# 3️⃣ Install Composer
+# 3️⃣ Enable Apache rewrite
+RUN a2enmod rewrite
+
+# 4️⃣ Set Document Root to /public
+ENV APACHE_DOCUMENT_ROOT=/var/www/public
+RUN sed -ri 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
+ && sed -ri 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+
+# 5️⃣ Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# 4️⃣ Install Node.js 20 (IMPORTANT)
+# 6️⃣ Install Node.js
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
-# 5️⃣ Set Working Directory
+# 7️⃣ Working directory
 WORKDIR /var/www
 
-# 6️⃣ Copy Project Files
+# 8️⃣ Copy project
 COPY . .
 
-# 7️⃣ Install PHP Dependencies
+# 9️⃣ Install PHP deps
 RUN composer install --no-dev --optimize-autoloader
 
-# 8️⃣ Storage Symlink (IMPORTANT)
+# 🔟 Storage link
 RUN php artisan storage:link || true
 
-# 9️⃣ Frontend Build
+# 1️⃣1️⃣ Build frontend
 RUN npm install && npm run build
 
-# 🔟 Permissions
-RUN chmod -R 775 storage bootstrap/cache
-
-# 1️⃣1️⃣ Expose (Render informational)
-EXPOSE 10000
-
-# 1️⃣2️⃣ Start Laravel on Render PORT
-CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=$PORT"]
+# 1️⃣2️⃣ Permissions
+RUN chown -R www-data:www-data storage bootstrap/cache
